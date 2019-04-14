@@ -24,8 +24,6 @@ msb_zero:			; if v[x].MSB == zero
 	ADD X #1
 	LDR A 0,x
 	JZ final_process		; if v[x].MSB == 0 && v[x].LSB == 0
-;	LDR B #1			; set flag for next time
-;	STR B flag
 	LDR B flag		; we must toggle the flag here because we're skiping one byte		
 	JZ set_flag		; flag was set to 0 and must be set to 1
 	LDR B #0			; flag was set to 1 and must be set to zero 
@@ -53,17 +51,17 @@ set_bit_0:
 rotate_end:
 	LDR B flag
 	JZ flag_is_clear		; flag == 0
-	ADD B #-1		
+	SUB B #1		
 	JZ flag_is_set		; flag == 1
-	ADD B #-1
+	SUB B #1
 	JZ flag_2		; flag == 2 (str in result_msb)
-	ADD B #-1
+	SUB B #1
 	JZ flag_3		; flag == 4 (str in result_lsb)
 	
 flag_is_clear:			; that means we are handling MSB
 	ADD A result_lsb
-	STR A result_lsb		; overflow ??
-	JC adjust_carry
+	STR A result_lsb		
+	JC adjust_carry		; verify if an overflow occurred
 return_from_carry:
 	LDR B #1			; set flag for next time
 	STR B flag
@@ -96,8 +94,10 @@ flag_2:				; here we have result_msb inverted in RA
 	LDR B #3
 	STR B flag
 	JMP rotate
+
 flag_3:				; here we have result_lsb inverted in RA
 	STR A result_msb
+; fallthrough
 end:				; swap total msb and lsb
 	HLT
 
