@@ -1,0 +1,151 @@
+; Important addresses
+; 197 vector address
+; 198 result msb
+; 199 result LSB
+; 200-255 bytes reserved to the vector
+;
+init:
+; put zero on result
+	LDR A #0
+	STR A result_msb
+	STR A result_lsb
+	STR A flag
+	LDR X vector_address
+	JMP handle_vector
+
+increase_index:
+	ADD X #1
+handle_vector:
+	LDR A 0,X
+	JZ msb_zero
+	JMP rotate
+
+msb_zero:			; if v[x].MSB == zero
+	ADD X #1
+	LDR A 0,x
+	JZ final_process		; if v[x].MSB == 0 && v[x].LSB == 0
+;	LDR B #1			; set flag for next time
+;	STR B flag
+	LDR B flag		; we must toggle the flag here because we're skiping one byte		
+	JZ set_flag		; flag was set to 0 and must be set to 1
+	LDR B #0			; flag was set to 1 and must be set to zero 
+	STR B flag
+	JMP rotate		; that means v[x].MSB == 0 && v[x].LSB != 0
+
+set_flag:
+	LDR B #1
+	STR B flag
+; fallthrough	
+rotate:				; ROR A four times
+	LDR B #4
+rotate_loop:
+	JZ rotate_end
+	SHR A
+	JC set_bit_0
+	SUB B #1
+	JMP rotate_loop
+
+set_bit_0:
+	OR A #128
+	SUB B #1
+	JMP rotate_loop
+
+rotate_end:
+	LDR B flag
+	JZ flag_is_clear		; flag == 0
+	ADD B #-1		
+	JZ flag_is_set		; flag == 1
+	ADD B #-1
+	JZ flag_2		; flag == 2 (str in result_msb)
+	ADD B #-1
+	JZ flag_3		; flag == 4 (str in result_lsb)
+	
+flag_is_clear:			; that means we are handling MSB
+	ADD A result_lsb
+	STR A result_lsb		; overflow ??
+	JC adjust_carry
+return_from_carry:
+	LDR B #1			; set flag for next time
+	STR B flag
+	JMP increase_index
+
+adjust_carry:
+	LDR B result_msb
+	ADD B #1
+	STR B result_msb
+	JMP return_from_carry
+
+flag_is_set:			; that means we are handling LSB
+	ADD A result_msb
+	STR A result_msb		; overflow doesn't need to be handled
+	LDR B #0			; clear set for next time
+	STR B flag
+	JMP increase_index
+
+final_process:			; when the program reaches the end of the vector
+	LDR B #2			; It's going to invert result_msb
+	STR B flag
+	LDR A result_msb
+	JMP rotate
+
+flag_2:				; here we have result_msb inverted in RA
+	LDR B result_lsb		; make a copy of result_lsb
+	STR B copy
+	STR A result_lsb		; saves result_msb inverted on result_lsb
+	LDR A copy		; loads result_lsb to be inverted
+	LDR B #3
+	STR B flag
+	JMP rotate
+flag_3:				; here we have result_lsb inverted in RA
+	STR A result_msb
+end:				; swap total msb and lsb
+	HLT
+
+org 195
+flag: DB 0
+copy: DB 0
+
+org 197
+vector_address: DB vector
+result_msb: DB hAB
+result_lsb: DB hCD
+
+; case 1
+;org 208
+;vector: DAB 1, 2, 5, 26, 43, 60, 77, 94, 0, 0
+
+; case 2
+;org 200
+;vector: DAB 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 0
+
+; case 3
+;org 216
+;vector: DAB 0, 0
+
+; case 4
+;org 200
+;vector: DAB 255, 255, 0, 0
+
+; case 5
+;org 210
+;vector: DAB 15, 240, 0, 0
+
+; case 6
+;org 205
+;vector: DAB 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 255, 0, 0
+
+; case 7
+org 200
+vector: DAB 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 0
+
+; case 8
+;org 200
+;vector: DAB 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 0, 0
+
+; case 9
+;org 200
+;vector: DAB 0, 16, 0, 32, 0, 48, 0, 64, 0, 80, 0, 96, 0, 112, 0, 128, 0, 0
+
+; case 10
+;org 205
+;vector: DAB 16, 32, 48, 64, 80, 96, 0, 0
